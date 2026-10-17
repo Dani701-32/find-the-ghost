@@ -17,6 +17,10 @@ public class PlayerController : MonoBehaviour
     [SerializeField] private float lookAngleLimit = 90.0f;
     [SerializeField] private float lookSensitivity = 0.2f;
 
+    //Interação
+    [SerializeField] private float interactionDistance = 3.0f;
+    [SerializeField] private LayerMask interactionLayerMask;
+
 
     private Camera mainCamera;
     private CharacterController characterController;
@@ -24,8 +28,11 @@ public class PlayerController : MonoBehaviour
 
     private InputAction moveAction;
     private InputAction sprintAction;
+
     private InputAction jumpAction;
     private bool jumped = false;
+
+    private InputAction interactAction;
 
 
     private float currentMoveSpeed = 0.0f;
@@ -42,6 +49,9 @@ public class PlayerController : MonoBehaviour
 
         jumpAction = InputSystem.actions.FindAction("Jump");
         jumpAction.started += Jumped;
+
+        interactAction = InputSystem.actions.FindAction("Interact");
+        interactAction.started += Interacted;
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -95,5 +105,26 @@ public class PlayerController : MonoBehaviour
 
         mainCamera.transform.localRotation = Quaternion.Euler(lookAngle, 0.0f, 0.0f);
         transform.rotation *= Quaternion.Euler(0.0f, mouseDelta.x * lookSensitivity, 0.0f);
+    }
+
+    private void Interacted(InputAction.CallbackContext context)
+    {
+        Ray ray = new Ray(mainCamera.transform.position, mainCamera.transform.forward);
+        RaycastHit hit;
+
+        if(Physics.Raycast(ray, out hit, interactionDistance, interactionLayerMask))
+        {
+            IInteractable interactable = hit.collider.GetComponent<IInteractable>();
+            if(interactable != null)
+            {
+                interactable.Interact();
+            }
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if(interactAction != null)
+            interactAction.started -= Interacted;
     }
 }
