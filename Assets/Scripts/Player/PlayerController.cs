@@ -33,6 +33,7 @@ public class PlayerController : MonoBehaviour
     private bool jumped = false;
 
     private InputAction interactAction;
+    private OutlineHighlight currentTarget;
 
 
     private float currentMoveSpeed = 0.0f;
@@ -72,6 +73,7 @@ public class PlayerController : MonoBehaviour
 
         HandleLookings(mouseDelta);
         HandleMovement(moveVector);
+        UpdateSelection(); 
     }
 
     private void HandleMovement(Vector2 moveVector)
@@ -106,20 +108,33 @@ public class PlayerController : MonoBehaviour
         mainCamera.transform.localRotation = Quaternion.Euler(lookAngle, 0.0f, 0.0f);
         transform.rotation *= Quaternion.Euler(0.0f, mouseDelta.x * lookSensitivity, 0.0f);
     }
+    private void UpdateSelection()
+    {
+        OutlineHighlight nextTarget = null; 
+        Ray ray = new Ray(mainCamera.transform.position, mainCamera.transform.forward);
+        if (Physics.Raycast(ray, out RaycastHit hit, interactionDistance, interactionLayerMask))
+            nextTarget = hit.collider.GetComponentInParent<OutlineHighlight>();
+
+        if (nextTarget == currentTarget)
+            return;
+
+        if (currentTarget != null)
+            currentTarget.SetHighlighted(false);
+
+        currentTarget = nextTarget;
+
+        if (currentTarget != null)
+            currentTarget.SetHighlighted(true);
+    }
 
     private void Interacted(InputAction.CallbackContext context)
     {
-        Ray ray = new Ray(mainCamera.transform.position, mainCamera.transform.forward);
-        RaycastHit hit;
+        if (currentTarget == null)
+        return;
 
-        if(Physics.Raycast(ray, out hit, interactionDistance, interactionLayerMask))
-        {
-            IInteractable interactable = hit.collider.GetComponent<IInteractable>();
-            if(interactable != null)
-            {
-                interactable.Interact();
-            }
-        }
+        IInteractable interactable = currentTarget.GetComponentInParent<IInteractable>();
+
+        interactable?.Interact();
     }
 
     private void OnDestroy()

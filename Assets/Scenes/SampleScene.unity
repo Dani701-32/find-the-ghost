@@ -259,6 +259,7 @@ GameObject:
   - component: {fileID: 414315944}
   - component: {fileID: 414315943}
   - component: {fileID: 414315942}
+  - component: {fileID: 414315947}
   m_Layer: 3
   m_Name: Wrong
   m_TagString: Untagged
@@ -371,6 +372,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &414315947
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 414315941}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db22e96de1c2d3773b1c95dd4133e5d9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OutlineHighlight
+  outlineMaterial: {fileID: 2100000, guid: 796b62a908066016c81a16ee40af489d, type: 2}
 --- !u!1 &733507591
 GameObject:
   m_ObjectHideFlags: 0
@@ -657,6 +671,7 @@ GameObject:
   - component: {fileID: 1075791451}
   - component: {fileID: 1075791450}
   - component: {fileID: 1075791449}
+  - component: {fileID: 1075791454}
   m_Layer: 3
   m_Name: Right
   m_TagString: Untagged
@@ -769,6 +784,19 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1075791454
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1075791448}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: db22e96de1c2d3773b1c95dd4133e5d9, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::OutlineHighlight
+  outlineMaterial: {fileID: 2100000, guid: 796b62a908066016c81a16ee40af489d, type: 2}
 --- !u!1 &1668787101
 GameObject:
   m_ObjectHideFlags: 0
