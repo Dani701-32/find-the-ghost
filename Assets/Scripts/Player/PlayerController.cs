@@ -34,6 +34,8 @@ public class PlayerController : MonoBehaviour
 
     private InputAction interactAction;
     private OutlineHighlight currentTarget;
+    private int EffectiveInteractionLayerMask =>
+        interactionLayerMask.value == 0 ? Physics.DefaultRaycastLayers : interactionLayerMask.value;
 
 
     private float currentMoveSpeed = 0.0f;
@@ -112,8 +114,13 @@ public class PlayerController : MonoBehaviour
     {
         OutlineHighlight nextTarget = null; 
         Ray ray = new Ray(mainCamera.transform.position, mainCamera.transform.forward);
-        if (Physics.Raycast(ray, out RaycastHit hit, interactionDistance, interactionLayerMask))
+        if (Physics.Raycast(ray, out RaycastHit hit, interactionDistance, EffectiveInteractionLayerMask))
             nextTarget = hit.collider.GetComponentInParent<OutlineHighlight>();
+
+        IInteractable nextInteractable = GetInteractable(nextTarget);
+        GameController controller = GameController.Instance;
+        if (nextTarget != null && controller != null && !controller.CanInteract(nextInteractable))
+            nextTarget = null;
 
         if (nextTarget == currentTarget)
             return;
@@ -130,18 +137,60 @@ public class PlayerController : MonoBehaviour
     private void Interacted(InputAction.CallbackContext context)
     {
         if (currentTarget == null)
-        return;
+            return;
 
-        IInteractable interactable = currentTarget.GetComponentInParent<IInteractable>();
-        if (interactable == null)
-            interactable = currentTarget.GetComponentInChildren<IInteractable>();
+        IInteractable interactable = GetInteractable(currentTarget);
+        GameController controller = GameController.Instance;
+        if (controller != null && !controller.CanInteract(interactable))
+            return;
 
         interactable?.Interact();
+    }
+
+    private static IInteractable GetInteractable(OutlineHighlight target)
+    {
+        if (target == null)
+            return null;
+
+        IInteractable interactable = target.GetComponentInParent<IInteractable>();
+        if (interactable == null)
+            interactable = target.GetComponentInChildren<IInteractable>();
+
+        return interactable;
+    }
+
+    public void TeleportTo(Transform spawnPoint)
+    {
+        if (spawnPoint == null)
+        {
+            Debug.LogError("Não é possível teleportar o jogador para um spawn nulo.", this);
+            return;
+        }
+
+        if (characterController == null)
+            characterController = GetComponent<CharacterController>();
+
+        if (currentTarget != null)
+            currentTarget.SetHighlighted(false);
+        currentTarget = null;
+
+        bool wasEnabled = characterController != null && characterController.enabled;
+        if (wasEnabled)
+            characterController.enabled = false;
+
+        transform.SetPositionAndRotation(spawnPoint.position, spawnPoint.rotation);
+        moveDirection = Vector3.zero;
+        jumped = false;
+
+        if (wasEnabled)
+            characterController.enabled = true;
     }
 
     private void OnDestroy()
     {
         if(interactAction != null)
             interactAction.started -= Interacted;
+        if (jumpAction != null)
+            jumpAction.started -= Jumped;
     }
 }

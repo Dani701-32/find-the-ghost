@@ -5,22 +5,48 @@ public class DebuggingObject : MonoBehaviour, IInteractable
     [SerializeField] private bool isHaunted;
     [SerializeField] private GameObject ghostPrefab;
 
+    public bool IsHauntedTarget => isHaunted;
+
     public void Interact()
     {
-        if (!isHaunted)
+        GameController controller = GameController.Instance;
+        if (controller == null)
+        {
+            Debug.LogError("DebuggingObject precisa de um GameController ativo.", this);
             return;
+        }
 
+        controller.InteractWithObject(this);
+    }
+
+    public void ConfigureAsHaunted(bool haunted)
+    {
+        isHaunted = haunted;
+    }
+
+    public void BreakObject()
+    {
+        Destroy(gameObject);
+    }
+
+    public void RemoveObject()
+    {
+        Destroy(gameObject);
+    }
+
+    public GhostBehavior SpawnGhost()
+    {
         if (ghostPrefab == null)
         {
             Debug.LogError("O objeto assombrado precisa de um prefab de fantasma.", this);
-            return;
+            return null;
         }
 
         OutlineHighlight sourceHighlight = GetComponentInParent<OutlineHighlight>();
         if (sourceHighlight == null || sourceHighlight.OutlineMaterial == null)
         {
             Debug.LogError("O objeto assombrado precisa de um OutlineHighlight com material configurado.", this);
-            return;
+            return null;
         }
 
         GameObject ghost = Instantiate(ghostPrefab, transform.position, transform.rotation);
@@ -31,7 +57,7 @@ public class DebuggingObject : MonoBehaviour, IInteractable
         {
             Debug.LogError("O prefab de fantasma precisa conter pelo menos um Renderer.", ghost);
             Destroy(ghost);
-            return;
+            return null;
         }
 
         OutlineHighlight ghostHighlight = ghost.GetComponent<OutlineHighlight>();
@@ -44,7 +70,7 @@ public class DebuggingObject : MonoBehaviour, IInteractable
             if (!AddInteractionCollider(ghost, renderers))
             {
                 Destroy(ghost);
-                return;
+                return null;
             }
         }
 
@@ -55,10 +81,10 @@ public class DebuggingObject : MonoBehaviour, IInteractable
         if (!ghostBehavior.Activate())
         {
             Destroy(ghost);
-            return;
+            return null;
         }
 
-        Destroy(gameObject);
+        return ghostBehavior;
     }
 
     private static bool AddInteractionCollider(GameObject ghost, Renderer[] renderers)

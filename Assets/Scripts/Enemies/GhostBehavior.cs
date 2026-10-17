@@ -49,14 +49,14 @@ public class GhostBehavior : MonoBehaviour, IInteractable
 
     public void Interact()
     {
-        if (fleeing)
-        {
-            Destroy(gameObject);
+        if (!activated || !fleeing)
             return;
-        }
 
-        if (!activated)
-            Activate();
+        GameController controller = GameController.Instance;
+        if (controller == null || !controller.CaptureGhost(this))
+            return;
+
+        Destroy(transform.root.gameObject);
     }
 
     public bool Activate()
