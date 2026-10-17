@@ -8,10 +8,13 @@ public class GhostBehavior : MonoBehaviour, IInteractable
     [SerializeField] private float maxFleeDistance = 8f;
     [SerializeField] private float sampleRadius = 2f;
     [SerializeField] private Vector2 destinationInterval = new Vector2(1.5f, 3f);
+    [SerializeField] private float stareDuration = 2f;
 
     private NavMeshAgent agent;
     [SerializeField] private Transform player;
     [SerializeField] private bool activated;
+    private bool fleeing;
+    private float fleeStartTime;
     private float nextDestinationTime;
 
     private void Awake()
@@ -22,21 +25,23 @@ public class GhostBehavior : MonoBehaviour, IInteractable
 
     private void Start()
     {
-        GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
-
-        if (playerObject == null)
-        {
-            Debug.LogError("GhostBehavior precisa encontrar um objeto com a tag Player.", this);
-            return;
-        }
-
-        player = playerObject.transform;
+        FindPlayer();
     }
 
     private void Update()
     {
-        if (!activated || player == null || !agent.isOnNavMesh ||
-            Time.time < nextDestinationTime)
+        if (!activated || player == null || !agent.isOnNavMesh)
+            return;
+
+        if (!fleeing)
+        {
+            FacePlayer();
+            if (Time.time >= fleeStartTime)
+                StartFleeing();
+            return;
+        }
+
+        if (Time.time < nextDestinationTime)
             return;
 
         ChooseFleeDestination();
@@ -44,27 +49,74 @@ public class GhostBehavior : MonoBehaviour, IInteractable
 
     public void Interact()
     {
-        if (activated)
+        if (fleeing)
         {
             Destroy(gameObject);
             return;
         }
 
+        if (!activated)
+            Activate();
+    }
+
+    public bool Activate()
+    {
+        if (activated)
+            return true;
+
+        if (player == null)
+        {
+            FindPlayer();
+        }
+
         if (player == null)
         {
             Debug.LogError("O fantasma não pode ser ativado sem encontrar o Player.", this);
-            return;
+            return false;
+        }
+
+        if (!agent.isOnNavMesh &&
+            (!NavMesh.SamplePosition(transform.position, out NavMeshHit spawnPosition,
+                 sampleRadius, agent.areaMask) ||
+             !agent.Warp(spawnPosition.position)))
+        {
+            Debug.LogError("O NavMeshAgent do fantasma não está sobre um NavMesh.", this);
+            return false;
         }
 
         if (!agent.isOnNavMesh)
         {
-            Debug.LogError("O NavMeshAgent do fantasma não está sobre um NavMesh.", this);
-            return;
+            Debug.LogError("Não foi possível posicionar o fantasma sobre um NavMesh.", this);
+            return false;
         }
 
         activated = true;
+        agent.isStopped = true;
+        fleeStartTime = Time.time + Mathf.Max(0f, stareDuration);
+        FacePlayer();
+        return true;
+    }
+
+    private void StartFleeing()
+    {
+        fleeing = true;
         agent.isStopped = false;
         ChooseFleeDestination();
+    }
+
+    private void FacePlayer()
+    {
+        Vector3 direction = player.position - transform.position;
+        direction.y = 0f;
+        if (direction.sqrMagnitude > 0.001f)
+            transform.rotation = Quaternion.LookRotation(direction);
+    }
+
+    private void FindPlayer()
+    {
+        GameObject playerObject = GameObject.FindGameObjectWithTag("Player");
+        if (playerObject != null)
+            player = playerObject.transform;
     }
 
     private void ChooseFleeDestination()

@@ -133,6 +133,8 @@ public class PlayerController : MonoBehaviour
         return;
 
         IInteractable interactable = currentTarget.GetComponentInParent<IInteractable>();
+        if (interactable == null)
+            interactable = currentTarget.GetComponentInChildren<IInteractable>();
 
         interactable?.Interact();
     }
