@@ -14,3 +14,4 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::RoomData
   isHaunted: 0
   roomPrefab: {fileID: 6052681335603944583, guid: f45053fc0cdd08c35813f74f761564ea, type: 3}
+  roomName: 'Main Hall '

@@ -106,6 +106,8 @@ MonoBehaviour:
   interactionLayerMask:
     serializedVersion: 2
     m_Bits: 264
+  interactionDuration: 1
+  interactionSlider: {fileID: 0}
 --- !u!1 &6713560786633998413
 GameObject:
   m_ObjectHideFlags: 0

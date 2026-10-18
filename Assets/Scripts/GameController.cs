@@ -1,5 +1,7 @@
 using System;
+using System.Collections;
 using UnityEngine;
+using TMPro;
 
 public class GameController : MonoBehaviour
 {
@@ -8,9 +10,21 @@ public class GameController : MonoBehaviour
     [SerializeField, Min(1)] private int attemptsPerRoom = 3;
     [SerializeField] private PlayerController player;
 
+    [Header("UI Controllers")]
+    [SerializeField] private GameObject roomTitleCard;
+    [SerializeField] private TextMeshProUGUI roomTitleText;
+    [SerializeField] private GameObject roomAttemptsCard;
+    [SerializeField] private TextMeshProUGUI roomAttemptsText;
+    [SerializeField, Min(0.01f)] private float roomTitleCardDuration = 3f;
+    [SerializeField] private GameObject gameOverScreen;
+
     private static GameController instance;
     private GameObject currentRoomObject;
     private RoomData currentRoom;
+    private CanvasGroup roomTitleCanvasGroup;
+    private CanvasGroup roomAttemptsCanvasGroup;
+    private Coroutine roomTitleRoutine;
+    private Coroutine roomAttemptsRoutine;
     private GhostBehavior looseGhost;
     private int attemptsRemaining;
     private int challengeRoomIndex = -1;
@@ -19,8 +33,11 @@ public class GameController : MonoBehaviour
     private bool ghostWasCaught;
     private bool transitioning;
     private bool gameCompleted;
+    private bool gameOver;
 
     public static GameController Instance => instance;
+
+    [Header("Game State")]
     public int AttemptsRemaining => attemptsRemaining;
     public int AttemptsPerRoom => attemptsPerRoom;
     public RoomData CurrentRoom => currentRoom;
@@ -39,6 +56,41 @@ public class GameController : MonoBehaviour
         }
 
         instance = this;
+
+        if (roomTitleCard == null)
+            Debug.LogError("Configure o roomTitleCard no GameController.", this);
+        else
+        {
+            roomTitleCanvasGroup = roomTitleCard.GetComponent<CanvasGroup>();
+            if (roomTitleCanvasGroup == null)
+                roomTitleCanvasGroup = roomTitleCard.AddComponent<CanvasGroup>();
+
+            roomTitleCanvasGroup.alpha = 0f;
+            roomTitleCard.SetActive(false);
+        }
+
+        if (roomTitleText == null)
+            Debug.LogError("Configure o roomTitleText no GameController.", this);
+
+        if (roomAttemptsCard == null)
+            Debug.LogError("Configure o roomAttemptsCard no GameController.", this);
+        else
+        {
+            roomAttemptsCanvasGroup = roomAttemptsCard.GetComponent<CanvasGroup>();
+            if (roomAttemptsCanvasGroup == null)
+                roomAttemptsCanvasGroup = roomAttemptsCard.AddComponent<CanvasGroup>();
+
+            roomAttemptsCanvasGroup.alpha = 0f;
+            roomAttemptsCard.SetActive(false);
+        }
+
+        if (roomAttemptsText == null)
+            Debug.LogError("Configure o roomAttemptsText no GameController.", this);
+
+        if (gameOverScreen == null)
+            Debug.LogError("Configure a gameOverScreen no GameController.", this);
+        else
+            gameOverScreen.SetActive(false);
     }
 
     private void Start()
@@ -71,7 +123,7 @@ public class GameController : MonoBehaviour
 
     public bool CanInteract(IInteractable target)
     {
-        if (target == null || transitioning || gameCompleted || currentRoom == null)
+        if (target == null || transitioning || gameCompleted || gameOver || currentRoom == null)
             return false;
 
         return !ghostWasReleased || ghostWasCaught || target is GhostBehavior;
@@ -101,7 +153,9 @@ public class GameController : MonoBehaviour
         Debug.Log($"Objeto comum quebrado. Tentativas restantes nesta sala: {attemptsRemaining}.", target);
 
         if (attemptsRemaining <= 0)
-            LoseAndReturnToStart("As três tentativas da sala foram usadas.");
+            ShowGameOver("As tentativas da sala foram usadas.");
+        else
+            ShowAttemptFailedMessage();
     }
 
     public bool CaptureGhost(GhostBehavior ghost)
@@ -168,7 +222,8 @@ public class GameController : MonoBehaviour
         Debug.LogWarning($"{reason} Retornando à sala inicial.", this);
         GameLost?.Invoke(reason);
         challengeRoomIndex = -1;
-        LoadRoom(startingRoom, true, -1);
+        if (LoadRoom(startingRoom, true, -1))
+            ShowRoomAlert($"{startingRoom.RoomName}\nYou returned to the starting room.");
     }
 
     private bool LoadRoom(RoomData roomData, bool loadStartingRoom, int roomIndex)
@@ -197,6 +252,7 @@ public class GameController : MonoBehaviour
             return false;
         }
 
+        gameOver = false;
         if (currentRoomObject != null)
             Destroy(currentRoomObject);
         if (looseGhost != null)
@@ -211,14 +267,142 @@ public class GameController : MonoBehaviour
         ghostWasCaught = false;
         attemptsRemaining = attemptsPerRoom;
 
+        HideRoomAlert();
+
         player.TeleportTo(newRoomInstance.PlayerSpawnPoint);
         AttemptsChanged?.Invoke(attemptsRemaining, attemptsPerRoom);
         transitioning = false;
+        if (gameOverScreen != null)
+            gameOverScreen.SetActive(false);
+        player.SetControlsEnabled(true);
+        ShowRoomTitle(roomData);
         return true;
+    }
+
+    private void ShowGameOver(string reason)
+    {
+        if (gameOver)
+            return;
+
+        gameOver = true;
+        Debug.LogWarning(reason, this);
+        GameLost?.Invoke(reason);
+
+        if (gameOverScreen != null)
+            gameOverScreen.SetActive(true);
+
+        if (player != null)
+            player.SetControlsEnabled(false);
+    }
+
+    private void ShowAttemptFailedMessage()
+    {
+        if (roomAttemptsCard == null || roomAttemptsText == null || currentRoom == null)
+            return;
+
+        string remainingAttempts = $"{attemptsRemaining} {(attemptsRemaining == 1 ? "attempt" : "attempts")} remaining.";
+        ShowRoomAlert($"{currentRoom.RoomName}\nAttempt failed. {remainingAttempts}");
+    }
+
+    private void ShowRoomAlert(string message)
+    {
+        if (roomAttemptsCard == null || roomAttemptsText == null || roomAttemptsCanvasGroup == null)
+            return;
+
+        if (roomAttemptsRoutine != null)
+            StopCoroutine(roomAttemptsRoutine);
+
+        roomAttemptsText.text = message;
+        roomAttemptsCanvasGroup.alpha = 0f;
+        roomAttemptsCard.SetActive(true);
+        roomAttemptsRoutine = StartCoroutine(ShowRoomAlertRoutine());
+    }
+
+    private IEnumerator ShowRoomAlertRoutine()
+    {
+        const float totalDuration = 2f;
+        const float fadeDuration = totalDuration * 0.25f;
+        const float visibleDuration = totalDuration - (fadeDuration * 2f);
+
+        yield return FadeCanvasGroup(roomAttemptsCanvasGroup, 0f, 1f, fadeDuration);
+        yield return new WaitForSecondsRealtime(visibleDuration);
+        yield return FadeCanvasGroup(roomAttemptsCanvasGroup, 1f, 0f, fadeDuration);
+
+        roomAttemptsCanvasGroup.alpha = 0f;
+        roomAttemptsCard.SetActive(false);
+        roomAttemptsRoutine = null;
+    }
+
+    private void HideRoomAlert()
+    {
+        if (roomAttemptsRoutine != null)
+        {
+            StopCoroutine(roomAttemptsRoutine);
+            roomAttemptsRoutine = null;
+        }
+
+        if (roomAttemptsCanvasGroup != null)
+            roomAttemptsCanvasGroup.alpha = 0f;
+
+        if (roomAttemptsCard != null)
+            roomAttemptsCard.SetActive(false);
+    }
+
+    private void ShowRoomTitle(RoomData roomData)
+    {
+        if (roomTitleCard == null || roomTitleText == null || roomTitleCanvasGroup == null)
+            return;
+
+        if (roomTitleRoutine != null)
+            StopCoroutine(roomTitleRoutine);
+
+        roomTitleText.text = roomData.RoomName;
+        roomTitleRoutine = StartCoroutine(ShowRoomTitleRoutine());
+    }
+
+    private IEnumerator ShowRoomTitleRoutine()
+    {
+        roomTitleCanvasGroup.alpha = 0f;
+        roomTitleCard.SetActive(true);
+
+        float totalDuration = Mathf.Max(0.01f, roomTitleCardDuration);
+        float fadeDuration = totalDuration * 0.25f;
+        float visibleDuration = totalDuration - (fadeDuration * 2f);
+
+        yield return FadeRoomTitle(0f, 1f, fadeDuration);
+        yield return new WaitForSecondsRealtime(visibleDuration);
+        yield return FadeRoomTitle(1f, 0f, fadeDuration);
+
+        roomTitleCanvasGroup.alpha = 0f;
+        roomTitleCard.SetActive(false);
+        roomTitleRoutine = null;
+    }
+
+    private IEnumerator FadeRoomTitle(float startAlpha, float endAlpha, float duration)
+    {
+        yield return FadeCanvasGroup(roomTitleCanvasGroup, startAlpha, endAlpha, duration);
+    }
+
+    private IEnumerator FadeCanvasGroup(CanvasGroup canvasGroup, float startAlpha, float endAlpha, float duration)
+    {
+        float elapsed = 0f;
+        while (elapsed < duration)
+        {
+            elapsed += Time.unscaledDeltaTime;
+            canvasGroup.alpha = Mathf.Lerp(startAlpha, endAlpha, elapsed / duration);
+            yield return null;
+        }
+
+        canvasGroup.alpha = endAlpha;
     }
 
     private void OnDestroy()
     {
+        if (roomTitleRoutine != null)
+            StopCoroutine(roomTitleRoutine);
+        if (roomAttemptsRoutine != null)
+            StopCoroutine(roomAttemptsRoutine);
+
         if (instance == this)
             instance = null;
     }

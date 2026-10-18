@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem; 
+using UnityEngine.UI;
 
 
 [RequireComponent(typeof(CharacterController))]
@@ -20,6 +21,8 @@ public class PlayerController : MonoBehaviour
     //Interação
     [SerializeField] private float interactionDistance = 3.0f;
     [SerializeField] private LayerMask interactionLayerMask;
+    [SerializeField, Min(0.01f)] private float interactionDuration = 1.0f;
+    [SerializeField] private Slider interactionSlider;
 
 
     private Camera mainCamera;
@@ -34,6 +37,10 @@ public class PlayerController : MonoBehaviour
 
     private InputAction interactAction;
     private OutlineHighlight currentTarget;
+    private OutlineHighlight progressTarget;
+    private float interactionProgress;
+    private bool interactionCompleted;
+    private bool controlsEnabled = true;
     private int EffectiveInteractionLayerMask =>
         interactionLayerMask.value == 0 ? Physics.DefaultRaycastLayers : interactionLayerMask.value;
 
@@ -54,7 +61,13 @@ public class PlayerController : MonoBehaviour
         jumpAction.started += Jumped;
 
         interactAction = InputSystem.actions.FindAction("Interact");
-        interactAction.started += Interacted;
+        if (interactionSlider == null)
+            Debug.LogError("Configure o slider de interação no PlayerController.", this);
+        else
+        {
+            interactionSlider.value = 0f;
+            interactionSlider.gameObject.SetActive(false);
+        }
 
         Cursor.lockState = CursorLockMode.Locked;
         Cursor.visible = false;
@@ -65,6 +78,9 @@ public class PlayerController : MonoBehaviour
     // Update is called once per frame
     void Update()
     {
+        if (!controlsEnabled)
+            return;
+
         Vector2 moveVector = moveAction.ReadValue<Vector2>();
         Vector2 mouseDelta = new Vector2(Mouse.current.delta.x.ReadValue(), Mouse.current.delta.y.ReadValue());
 
@@ -76,6 +92,7 @@ public class PlayerController : MonoBehaviour
         HandleLookings(mouseDelta);
         HandleMovement(moveVector);
         UpdateSelection(); 
+        UpdateInteraction();
     }
 
     private void HandleMovement(Vector2 moveVector)
@@ -99,8 +116,30 @@ public class PlayerController : MonoBehaviour
 
     private void Jumped(InputAction.CallbackContext context)
     {
-        jumped = true;
-        
+        if (controlsEnabled)
+            jumped = true;
+    }
+
+    public void SetControlsEnabled(bool isEnabled)
+    {
+        controlsEnabled = isEnabled;
+        if (!isEnabled)
+        {
+            moveDirection = Vector3.zero;
+            jumped = false;
+            ResetInteractionProgress();
+
+            if (currentTarget != null)
+                currentTarget.SetHighlighted(false);
+            currentTarget = null;
+
+            Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
+            return;
+        }
+
+        Cursor.lockState = CursorLockMode.Locked;
+        Cursor.visible = false;
     }
     private void HandleLookings(Vector2 mouseDelta)
     {
@@ -134,17 +173,56 @@ public class PlayerController : MonoBehaviour
             currentTarget.SetHighlighted(true);
     }
 
-    private void Interacted(InputAction.CallbackContext context)
+    private void UpdateInteraction()
     {
-        if (currentTarget == null)
+        if (interactionSlider == null)
             return;
+
+        if (!interactAction.IsPressed() || currentTarget == null)
+        {
+            ResetInteractionProgress();
+            return;
+        }
 
         IInteractable interactable = GetInteractable(currentTarget);
         GameController controller = GameController.Instance;
-        if (controller != null && !controller.CanInteract(interactable))
+        if (interactable == null || (controller != null && !controller.CanInteract(interactable)))
+        {
+            ResetInteractionProgress();
+            return;
+        }
+
+        if (progressTarget != currentTarget)
+        {
+            ResetInteractionProgress();
+            progressTarget = currentTarget;
+        }
+
+        if (interactionCompleted)
             return;
 
-        interactable?.Interact();
+        interactionSlider.gameObject.SetActive(true);
+        interactionProgress += Time.deltaTime;
+        interactionSlider.value = Mathf.Clamp01(interactionProgress / Mathf.Max(0.01f, interactionDuration));
+
+        if (interactionSlider.value < 1f)
+            return;
+
+        interactionCompleted = true;
+        interactable.Interact();
+    }
+
+    private void ResetInteractionProgress()
+    {
+        interactionProgress = 0f;
+        progressTarget = null;
+        interactionCompleted = false;
+
+        if (interactionSlider == null)
+            return;
+
+        interactionSlider.value = 0f;
+        interactionSlider.gameObject.SetActive(false);
     }
 
     private static IInteractable GetInteractable(OutlineHighlight target)
@@ -188,8 +266,6 @@ public class PlayerController : MonoBehaviour
 
     private void OnDestroy()
     {
-        if(interactAction != null)
-            interactAction.started -= Interacted;
         if (jumpAction != null)
             jumpAction.started -= Jumped;
     }
