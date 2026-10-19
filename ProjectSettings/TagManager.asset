@@ -11,9 +11,9 @@ TagManager:
   - Interact
   - Water
   - UI
-  - 
-  - 
-  - 
+  - Walkable
+  - Obstacle
+  - Ghosts
   - 
   - 
   - 
