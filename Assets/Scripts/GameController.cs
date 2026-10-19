@@ -10,6 +10,9 @@ public class GameController : MonoBehaviour
     [SerializeField, Min(1)] private int attemptsPerRoom = 3;
     [SerializeField] private PlayerController player;
 
+    [Header("Menu")]
+    [SerializeField] private GameObject mainMenuPanel;
+
     [Header("UI Controllers")]
     [SerializeField] private GameObject roomTitleCard;
     [SerializeField] private TextMeshProUGUI roomTitleText;
@@ -17,6 +20,7 @@ public class GameController : MonoBehaviour
     [SerializeField] private TextMeshProUGUI roomAttemptsText;
     [SerializeField, Min(0.01f)] private float roomTitleCardDuration = 3f;
     [SerializeField] private GameObject gameOverScreen;
+    [SerializeField] private GameObject victoryScreen;
 
     private static GameController instance;
     private GameObject currentRoomObject;
@@ -57,6 +61,9 @@ public class GameController : MonoBehaviour
 
         instance = this;
 
+        if (mainMenuPanel == null)
+            Debug.LogError("Configure o mainMenuPanel no GameController.", this);
+
         if (roomTitleCard == null)
             Debug.LogError("Configure o roomTitleCard no GameController.", this);
         else
@@ -91,6 +98,11 @@ public class GameController : MonoBehaviour
             Debug.LogError("Configure a gameOverScreen no GameController.", this);
         else
             gameOverScreen.SetActive(false);
+
+        if (victoryScreen == null)
+            Debug.LogError("Configure a victoryScreen no GameController.", this);
+        else
+            victoryScreen.SetActive(false);
     }
 
     private void Start()
@@ -118,8 +130,71 @@ public class GameController : MonoBehaviour
         }
 
         attemptsPerRoom = Mathf.Max(1, attemptsPerRoom);
-        LoadRoom(startingRoom, true, -1);
+        ShowMainMenu();
     }
+
+    // ===== MENU =====
+
+    public void StartGame()
+    {
+        if (startingRoom == null)
+        {
+            Debug.LogError("Não é possível começar: a sala inicial não está configurada.", this);
+            return;
+        }
+
+        gameCompleted = false;
+        challengeRoomIndex = -1;
+
+        if (!LoadRoom(startingRoom, true, -1))
+            return;
+
+        if (mainMenuPanel != null)
+            mainMenuPanel.SetActive(false);
+    }
+
+    public void ShowMainMenu()
+    {
+        ClearCurrentRoom();
+
+        currentRoom = null;
+        isStartingRoom = false;
+        challengeRoomIndex = -1;
+        gameCompleted = false;
+        gameOver = false;
+        transitioning = false;
+        ghostWasReleased = false;
+        ghostWasCaught = false;
+        attemptsRemaining = attemptsPerRoom;
+
+        HideRoomAlert();
+        HideRoomTitle();
+
+        if (gameOverScreen != null)
+            gameOverScreen.SetActive(false);
+
+        if (victoryScreen != null)
+            victoryScreen.SetActive(false);
+
+        if (player != null)
+            player.SetControlsEnabled(false);
+
+        if (mainMenuPanel != null)
+            mainMenuPanel.SetActive(true);
+    }
+
+    public void QuitGame()
+    {
+        Debug.Log("Saindo do jogo.", this);
+
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
+
+    // ===== GAMEPLAY =====
 
     public bool CanInteract(IInteractable target)
     {
@@ -197,6 +272,7 @@ public class GameController : MonoBehaviour
         {
             gameCompleted = true;
             Debug.Log("Todas as salas de desafio foram concluídas.", this);
+            ShowVictory();
             GameCompleted?.Invoke();
             return;
         }
@@ -206,15 +282,7 @@ public class GameController : MonoBehaviour
 
     public void RestartGame()
     {
-        if (startingRoom == null)
-        {
-            Debug.LogError("Não é possível reiniciar: a sala inicial não está configurada.", this);
-            return;
-        }
-
-        gameCompleted = false;
-        challengeRoomIndex = -1;
-        LoadRoom(startingRoom, true, -1);
+        StartGame();
     }
 
     private void LoseAndReturnToStart(string reason)
@@ -272,11 +340,28 @@ public class GameController : MonoBehaviour
         player.TeleportTo(newRoomInstance.PlayerSpawnPoint);
         AttemptsChanged?.Invoke(attemptsRemaining, attemptsPerRoom);
         transitioning = false;
+
         if (gameOverScreen != null)
             gameOverScreen.SetActive(false);
+
+        if (victoryScreen != null)
+            victoryScreen.SetActive(false);
+
         player.SetControlsEnabled(true);
         ShowRoomTitle(roomData);
         return true;
+    }
+
+    private void ClearCurrentRoom()
+    {
+        if (currentRoomObject != null)
+            Destroy(currentRoomObject);
+
+        if (looseGhost != null)
+            Destroy(looseGhost.transform.root.gameObject);
+
+        currentRoomObject = null;
+        looseGhost = null;
     }
 
     private void ShowGameOver(string reason)
@@ -293,6 +378,15 @@ public class GameController : MonoBehaviour
 
         if (player != null)
             player.SetControlsEnabled(false);
+    }
+
+    private void ShowVictory()
+    {
+        if (player != null)
+            player.SetControlsEnabled(false);
+
+        if (victoryScreen != null)
+            victoryScreen.SetActive(true);
     }
 
     private void ShowAttemptFailedMessage()
@@ -376,6 +470,21 @@ public class GameController : MonoBehaviour
         roomTitleCanvasGroup.alpha = 0f;
         roomTitleCard.SetActive(false);
         roomTitleRoutine = null;
+    }
+
+    private void HideRoomTitle()
+    {
+        if (roomTitleRoutine != null)
+        {
+            StopCoroutine(roomTitleRoutine);
+            roomTitleRoutine = null;
+        }
+
+        if (roomTitleCanvasGroup != null)
+            roomTitleCanvasGroup.alpha = 0f;
+
+        if (roomTitleCard != null)
+            roomTitleCard.SetActive(false);
     }
 
     private IEnumerator FadeRoomTitle(float startAlpha, float endAlpha, float duration)
